@@ -69,7 +69,7 @@ volatile int flagTIM7 = 0;
 volatile int counterTIM6 = 0;
 volatile int counterTIM7 = 0;
 volatile long int JTemp = 0;
-volatile uint32_t ConvertedValue;
+volatile uint32_t ConvertedValue; // Value from ADC to show temperature
 char string[100];
 /* USER CODE END PV */
 
@@ -89,6 +89,7 @@ static void LCD_Config();
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	TS_StateTypeDef TS_State;
@@ -108,11 +109,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	}
 }
 
-/*void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
 {
 	if(adcHandle==&hadc1)
 	 ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
-}*/
+}
 
 
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
@@ -192,7 +193,7 @@ int main(void)
     BSP_LED_Init(LED_GREEN);
     BSP_LED_Init(LED_RED);
     LCD_Config();
-    HAL_ADC_Start(&hadc1);
+    HAL_ADC_Start_IT(&hadc1);
     HAL_TIM_Base_Start_IT(&htim6);
     HAL_TIM_Base_Start_IT(&htim7);
     printBoard();
@@ -202,27 +203,27 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-	  //Show temperature in celsius
-	  if(flagTIM7){
-		  flagTIM7=0;
+    while (1)
+    {
+    	//Show temperature in celsius
+    	if(flagTIM7){
+    		flagTIM7=0;
 
-		  ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
-		  JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
+    		//ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
+    		JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
 
-		  sprintf(string, "Temp: %ld C", JTemp);
-		  BSP_LCD_SetFont(&Font16);
-		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, LEFT_MODE);
-		    sprintf(string, "Time: %d s", counterTIM7);
-		    BSP_LCD_SetFont(&Font12);
-		    BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, RIGHT_MODE);
-		    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-	  }
-    /* USER CODE END WHILE */
+    		sprintf(string, "Temp: %ld C", JTemp);
+    		BSP_LCD_SetFont(&Font16);
+    		BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, LEFT_MODE);
+    		sprintf(string, "Time: %d s", counterTIM7);
+    		BSP_LCD_SetFont(&Font12);
+    		BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, RIGHT_MODE);
+    		BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    	}
+    	/* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-  }
+    	/* USER CODE BEGIN 3 */
+    }
   /* USER CODE END 3 */
 }
 
