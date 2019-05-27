@@ -64,11 +64,13 @@ TIM_HandleTypeDef htim7;
 SDRAM_HandleTypeDef hsdram1;
 
 /* USER CODE BEGIN PV */
-volatile int flag = 0;
+volatile int flagTIM6 = 0;
+volatile int flagTIM7 = 0;
 volatile int counterTIM6 = 0;
 volatile int counterTIM7 = 0;
 volatile long int JTemp = 0;
 volatile uint32_t ConvertedValue;
+char string[100];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,6 +89,25 @@ static void LCD_Config();
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	TS_StateTypeDef TS_State;
+
+	if (GPIO_Pin == GPIO_PIN_13) {
+		BSP_TS_GetState(&TS_State);
+
+		sprintf(string, "X = %d", (int) TS_State.touchX[0]);
+		BSP_LCD_DisplayStringAtLine(18, (uint8_t *) string);
+		sprintf(string, "Y = %d", (int) TS_State.touchY[0]);
+		BSP_LCD_DisplayStringAtLine(19, (uint8_t *) string);
+
+		if (TS_State.touchDetected)
+			BSP_LED_On(LED_GREEN);
+		else
+			BSP_LED_Off(LED_GREEN);
+	}
+}
+
 /*void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
 {
 	if(adcHandle==&hadc1)
@@ -99,24 +120,23 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 	if(htim->Instance == TIM6)
 	{
 		counterTIM6++;
-		flag = 1;
+		flagTIM6 = 1;
 	}
 
 	if(htim->Instance == TIM7)
 	{
 		counterTIM7++;
-		flag = 1;
-		ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
-		JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
+		flagTIM7 = 1;
+
 	}
 }
 
 void printBoard()
 {
-	/*for(int i=0; i<9; i++)
+	for(int i=0; i<9; i++)
 	{
 		BSP_LCD_DrawVLine(BSP_LCD_GetXSize()/2.10 + (BSP_LCD_GetXSize()/16)*i, BSP_LCD_GetYSize()/10, 400);
-	}*/
+	}
 
 	for(int j = 0; j<9; j++)
 	    {
@@ -132,12 +152,12 @@ void printBoard()
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	char string[100];
+
   /* USER CODE END 1 */
   
 
   /* Enable I-Cache---------------------------------------------------------*/
-  SCB_EnableICache();
+	SCB_EnableICache();
 
   /* Enable D-Cache---------------------------------------------------------*/
   SCB_EnableDCache();
@@ -176,6 +196,8 @@ int main(void)
     HAL_TIM_Base_Start_IT(&htim6);
     HAL_TIM_Base_Start_IT(&htim7);
     printBoard();
+    BSP_TS_Init(/*800, 480*/BSP_LCD_GetXSize(),BSP_LCD_GetYSize());
+    BSP_TS_ITConfig();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -183,21 +205,21 @@ int main(void)
   while (1)
   {
 	  //Show temperature in celsius
-	  if(flag){
-		  flag=0;
+	  if(flagTIM7){
+		  flagTIM7=0;
 
-		  //JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
+		  ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
+		  JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
 
 		  sprintf(string, "Temp: %ld C", JTemp);
-		  BSP_LCD_SetFont(&Font12);
+		  BSP_LCD_SetFont(&Font16);
 		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, LEFT_MODE);
-		  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);    /* USER CODE END WHILE */
+		    sprintf(string, "Time: %d s", counterTIM7);
+		    BSP_LCD_SetFont(&Font12);
+		    BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, RIGHT_MODE);
+		    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 	  }
-	  //Show time in seconds
-	  	  sprintf(string, "Time: %d s", counterTIM7);
-	  	  BSP_LCD_SetFont(&Font12);
-	  	  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, LEFT_MODE);
-	  	  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -674,6 +696,7 @@ static void MX_FMC_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOE_CLK_ENABLE();
@@ -684,6 +707,16 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOJ_CLK_ENABLE();
+
+  /*Configure GPIO pin : PI13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOI, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 }
 
