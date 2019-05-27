@@ -65,7 +65,8 @@ SDRAM_HandleTypeDef hsdram1;
 
 /* USER CODE BEGIN PV */
 volatile int flag = 0;
-volatile int counter = 0;
+volatile int counterTIM6 = 0;
+volatile int counterTIM7 = 0;
 volatile long int JTemp = 0;
 volatile uint32_t ConvertedValue;
 /* USER CODE END PV */
@@ -97,24 +98,30 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
 	if(htim->Instance == TIM6)
 	{
+		counterTIM6++;
 		flag = 1;
-		counter++;
-		ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
+	}
+
+	if(htim->Instance == TIM7)
+	{
+		counterTIM7++;
+		flag = 1;
+		ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
 		JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
-		/*  if (counter%2 == 0)
-		  {
-			  ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
-			  JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
-		  }*/
 	}
 }
 
 void printBoard()
 {
-	for(int i=0; i<9; i++)
+	/*for(int i=0; i<9; i++)
 	{
-		BSP_LCD_DrawVLine(BSP_LCD_GetXSize()/40 + (BSP_LCD_GetXSize()/16)*i, BSP_LCD_GetYSize()/10, 400);
-	}
+		BSP_LCD_DrawVLine(BSP_LCD_GetXSize()/2.10 + (BSP_LCD_GetXSize()/16)*i, BSP_LCD_GetYSize()/10, 400);
+	}*/
+
+	for(int j = 0; j<9; j++)
+	    {
+	      BSP_LCD_DrawHLine(BSP_LCD_GetXSize()/2.10, BSP_LCD_GetYSize()/10 + (BSP_LCD_GetYSize()/9.6)*j, 400);
+	    }
 }
 /* USER CODE END 0 */
 
@@ -179,13 +186,19 @@ int main(void)
 	  if(flag){
 		  flag=0;
 
-		  JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
+		  //JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
 
-		  sprintf(string, "Internal Temp: %ld C", JTemp);
-		  BSP_LCD_SetFont(&Font16);
-		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, RIGHT_MODE);
+		  sprintf(string, "Temp: %ld C", JTemp);
+		  BSP_LCD_SetFont(&Font12);
+		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, LEFT_MODE);
 		  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);    /* USER CODE END WHILE */
 	  }
+	  //Show time in seconds
+	  	  sprintf(string, "Time: %d s", counterTIM7);
+	  	  BSP_LCD_SetFont(&Font12);
+	  	  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, LEFT_MODE);
+	  	  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
