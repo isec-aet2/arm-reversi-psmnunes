@@ -38,6 +38,9 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define SQUARE BSP_LCD_GetYSize()/10  /*Square Dimension*/
+#define SIZE 8
+#define X0 56 // Coordenates with offset
+#define Y0 24
 #define MAX_CONVERTED_VALUE   4095    /* Max converted value */
 #define AMBIENT_TEMP            25    /* Ambient Temperature */
 #define VSENS_AT_AMBIENT_TEMP  760    /* VSENSE value (mv) at ambient temperature */
@@ -75,13 +78,16 @@ volatile uint8_t flagTS = 0;
 volatile uint8_t counterTIM2 = 20;
 volatile uint8_t counterTIM6 = 0;
 volatile uint8_t counterTIM7 = 0;
-volatile uint8_t counterP =0;
-volatile uint8_t flagPlayer = 0;
+volatile uint8_t countP = 0;
+volatile uint8_t countS = 0;
 volatile long int JTemp = 0;
 volatile uint32_t ConvertedValue; // Value from ADC to show temperature
 char string[100];
 volatile int x_Pos;
 volatile int y_Pos;
+volatile uint8_t cRadius = 20;
+volatile int x_Pos0 = X0;
+volatile int y_Pos0 = Y0;
 
 /* USER CODE END PV */
 
@@ -98,64 +104,62 @@ static void MX_TIM7_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 static void LCD_Config();
+void printBoard();
+void inicialSquare();
+void placeSquare(uint16_t, uint16_t);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-void printBoard()
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-	for(int i = 0; i<8; i++)
+
+	if(flagTS == 0) //Change flag after Touch
 	{
-		int x_Pos = BSP_LCD_GetXSize()/10 + i*SQUARE;
-
-		for(int j = 0; j<8; j++)
+		if (GPIO_Pin == GPIO_PIN_13)
 		{
-			int y_Pos = SQUARE + j*SQUARE;
-			BSP_LCD_DrawRect(x_Pos, y_Pos, SQUARE, SQUARE);
 
-			BSP_LCD_SetTextColor(LCD_COLOR_DARKYELLOW);
-			BSP_LCD_FillRect(x_Pos, y_Pos, SQUARE-2, SQUARE-2);
+			BSP_TS_GetState(&TS_State);
+
+			countP = 1;
+			HAL_Delay(100);
 		}
+
+		flagTS = 1;
 	}
 }
 
-void placeSquare(uint16_t x, uint16_t y)
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
 {
-	if(x > SQUARE*1 && x <= SQUARE*2)
-		x_Pos = SQUARE*1 + 56;
-	else if(x > SQUARE*2 && x <= SQUARE*3)
-		x_Pos = SQUARE*2 + 56;
-	else if(x > SQUARE*3 && x <= SQUARE*4)
-		x_Pos = SQUARE*3 + 56;
-	else if(x > SQUARE*4 && x <= SQUARE*5)
-		x_Pos = SQUARE*4 + 56;
-	else if(x > SQUARE*5 && x <= SQUARE*6)
-		x_Pos = SQUARE*5 + 56;
-	else if(x > SQUARE*6 && x <= SQUARE*7)
-		x_Pos = SQUARE*6 + 56;
-	else if(x > SQUARE*7 && x <= SQUARE*8)
-		x_Pos = SQUARE*7 + 56;
-	else if(x > SQUARE*8 && x <= SQUARE*9)
-		x_Pos = SQUARE*8 + 56;
-
-	if(y > SQUARE*1 && y <= SQUARE*2)
-		y_Pos = SQUARE*1 + 24;
-	else if(y > SQUARE*2 && y <= SQUARE*3)
-		y_Pos = SQUARE*2 + 24;
-	else if(y > SQUARE*3 && y <= SQUARE*4)
-		y_Pos = SQUARE*3 + 24;
-	else if(y > SQUARE*4 && y <= SQUARE*5)
-		y_Pos = SQUARE*4 + 24;
-	else if(y > SQUARE*5 && y <= SQUARE*6)
-		x_Pos = SQUARE*5 + 24;
-	else if(y > SQUARE*6 && y <= SQUARE*7)
-		y_Pos = SQUARE*6 + 24;
-	else if(y > SQUARE*7 && y <= SQUARE*8)
-		y_Pos = SQUARE*7 + 24;
-	else if(y > SQUARE*8 && y <= SQUARE*9)
-		y_Pos = SQUARE*8 + 24;
+	if(adcHandle==&hadc1)
+	 ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
 }
+
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == TIM6)
+	{
+		counterTIM6++;
+		flagTIM6 = 1;
+	}
+
+	if(htim->Instance == TIM7)
+	{
+		counterTIM7++;
+		flagTIM7 = 1;
+	}
+
+	  if(htim->Instance == TIM2)
+		{
+			counterTIM2--;
+			flagTIM2 = 1;
+	  }
+}
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -211,10 +215,10 @@ int main(void)
   BSP_LED_Init(LED_GREEN);
   BSP_LED_Init(LED_RED);
   LCD_Config();
-
   BSP_TS_Init(BSP_LCD_GetXSize(),BSP_LCD_GetYSize());
   BSP_TS_ITConfig();
   printBoard();
+  inicialSquare();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -252,7 +256,6 @@ int main(void)
 		  counterTIM2 = 20;
 	  }
 
-
 	  if(flagTIM7)
 	  {
 		  flagTIM7=0;
@@ -277,35 +280,33 @@ int main(void)
 		  BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
 	  }
 
-
-
-	  if(flagPlayer)
+	  if(countP)
 	  {
-		  HAL_Delay(50);
+		  flagTS = 0;
 
+		  HAL_Delay(50);
+		  countP = 1;
 		  if(TS_State.touchX[0] < BSP_LCD_GetYSize())
 		  {
 			  placeSquare(TS_State.touchX[0], TS_State.touchY[0]);
 
-			  if(counterP%2==0)
+			  if(countS%2==0)
 			  {
 				  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-				  BSP_LCD_FillCircle(x_Pos, y_Pos, 20);
+				  BSP_LCD_FillCircle(x_Pos, y_Pos, cRadius);
 				  //BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 			  }
 			  else
 			  {
 				  BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
-				  BSP_LCD_FillCircle(x_Pos, x_Pos, 20);
+				  BSP_LCD_FillCircle(x_Pos, y_Pos, cRadius);
 				  //BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 			  }
-			  counterP++;
+			  countS++;
 		  }
 		  flagTS = 0;
-		  //flagPlayer = 0;
+		  countP = 0;
 	  }
-
-
 
 
     /* USER CODE END WHILE */
@@ -888,47 +889,58 @@ static void LCD_Config(void)
   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
+void printBoard()
 {
-	if(adcHandle==&hadc1)
-	 ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
-}
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-
-	if(flagTS == 0) //Change flag after Touch
+	for(int i = 0; i<8; i++)
 	{
-		if (GPIO_Pin == GPIO_PIN_13)
+		int x_Pos = BSP_LCD_GetXSize()/10 + i*SQUARE;
+
+		for(int j = 0; j<8; j++)
 		{
-			BSP_TS_GetState(&TS_State);
-			counterP = 1;
+			int y_Pos = SQUARE + j*SQUARE;
+			BSP_LCD_DrawRect(x_Pos, y_Pos, SQUARE, SQUARE);
+
+			BSP_LCD_SetTextColor(LCD_COLOR_DARKYELLOW);
+			BSP_LCD_FillRect(x_Pos, y_Pos, SQUARE-2, SQUARE-2);
 		}
-
-		flagPlayer = 1;
 	}
 }
 
-void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
+void inicialSquare()
 {
-	if(htim->Instance == TIM6)
-	{
-		counterTIM6++;
-		flagTIM6 = 1;
-	}
+	x_Pos = SQUARE + 56;
+	y_Pos = SQUARE + 24;
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+	BSP_LCD_FillCircle(x_Pos+SQUARE*4, y_Pos+SQUARE*4, cRadius);
+	BSP_LCD_FillCircle(x_Pos+SQUARE*3, y_Pos+SQUARE*3, cRadius);
+	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+	BSP_LCD_FillCircle(x_Pos+SQUARE*3, y_Pos+SQUARE*4, cRadius);
+	BSP_LCD_FillCircle(x_Pos+SQUARE*4, y_Pos+SQUARE*3, cRadius);
+}
 
-	if(htim->Instance == TIM7)
-	{
-		counterTIM7++;
-		flagTIM7 = 1;
-	}
+void placeSquare(uint16_t x, uint16_t y)
+{
+	  flagTS=0;
 
-	  if(htim->Instance == TIM2)
-		{
-			counterTIM2--;
-			flagTIM2 = 1;
+	    if(TS_State.touchX[0]>=(x_Pos0) && TS_State.touchY[0]>=(y_Pos0) && TS_State.touchX[0]<=x_Pos0+SQUARE*8 && TS_State.touchY[0]<=y_Pos0+SQUARE*8)
+	  {
+	        for(int i=1; i<=SIZE; i++)
+	    {
+	      for(int j=1; j<=SIZE; j++)
+	      {
+	        if((TS_State.touchX[0]) > SQUARE*i && (TS_State.touchX[0]) <= SQUARE*(i+1) &&
+	          (TS_State.touchY[0]) > SQUARE*j && (TS_State.touchY[0]) <= SQUARE*(j+1))
+	        {
+	          x_Pos = x_Pos0+SQUARE*i;
+	          y_Pos = y_Pos0+SQUARE*j;
+	          i = SIZE;
+	          j = SIZE;
+	        }
+	      }
+	    }
 	  }
 }
+
 /* USER CODE END 4 */
 
 /**
