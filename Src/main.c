@@ -59,6 +59,7 @@ DSI_HandleTypeDef hdsi;
 
 LTDC_HandleTypeDef hltdc;
 
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim7;
 
@@ -67,14 +68,21 @@ SDRAM_HandleTypeDef hsdram1;
 /* USER CODE BEGIN PV */
 TS_StateTypeDef TS_State;
 uint16_t maxLCD = 0;
+volatile uint8_t flagTIM2 = 0;
 volatile uint8_t flagTIM6 = 0;
 volatile uint8_t flagTIM7 = 0;
 volatile uint8_t flagTS = 0;
-volatile int counterTIM6 = 0;
-volatile int counterTIM7 = 0;
+volatile uint8_t counterTIM2 = 20;
+volatile uint8_t counterTIM6 = 0;
+volatile uint8_t counterTIM7 = 0;
+volatile uint8_t counterP =0;
+volatile uint8_t flagPlayer = 0;
 volatile long int JTemp = 0;
 volatile uint32_t ConvertedValue; // Value from ADC to show temperature
 char string[100];
+volatile int x_Pos;
+volatile int y_Pos;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,67 +95,66 @@ static void MX_FMC_Init(void);
 static void MX_LTDC_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_TIM7_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 static void LCD_Config();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
-{
-	if(adcHandle==&hadc1)
-	 ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
-}
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-	//TS_StateTypeDef TS_State;
-	if (GPIO_Pin == GPIO_PIN_13)
-	{
-		BSP_TS_GetState(&TS_State);
-		flagTS = 1;
-	}
-}
-
-void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
-{
-	if(htim->Instance == TIM6)
-	{
-		counterTIM6++;
-		flagTIM6 = 1;
-	}
-
-	if(htim->Instance == TIM7)
-	{
-		counterTIM7++;
-		flagTIM7 = 1;
-	}
-}
 
 void printBoard()
 {
-	 for(int i = 0; i<8; i++)
-		  {
-			  int x_Pos = BSP_LCD_GetXSize()/10 + i*SQUARE;
-
-			  for(int j = 0; j<8; j++)
-			  {
-				  int y_Pos = SQUARE + j*SQUARE;
-				  BSP_LCD_DrawRect(x_Pos, y_Pos, SQUARE, SQUARE);
-
-				  BSP_LCD_SetTextColor(LCD_COLOR_DARKYELLOW);
-				  BSP_LCD_FillRect(x_Pos, y_Pos, SQUARE-2, SQUARE-2);
-			  }
-		  }
-	/*for(int i=0; i<9; i++)
+	for(int i = 0; i<8; i++)
 	{
-		BSP_LCD_DrawVLine(BSP_LCD_GetXSize()/2.10 + (BSP_LCD_GetXSize()/16)*i, BSP_LCD_GetYSize()/10, 400);
-	}
+		int x_Pos = BSP_LCD_GetXSize()/10 + i*SQUARE;
 
-	for(int j = 0; j<9; j++)
-	    {
-	      BSP_LCD_DrawHLine(BSP_LCD_GetXSize()/2.10, BSP_LCD_GetYSize()/10 + (BSP_LCD_GetYSize()/9.6)*j, 400);
-	    }*/
+		for(int j = 0; j<8; j++)
+		{
+			int y_Pos = SQUARE + j*SQUARE;
+			BSP_LCD_DrawRect(x_Pos, y_Pos, SQUARE, SQUARE);
+
+			BSP_LCD_SetTextColor(LCD_COLOR_DARKYELLOW);
+			BSP_LCD_FillRect(x_Pos, y_Pos, SQUARE-2, SQUARE-2);
+		}
+	}
+}
+
+void placeSquare(uint16_t x, uint16_t y)
+{
+	if(x > SQUARE*1 && x <= SQUARE*2)
+		x_Pos = SQUARE*1 + 56;
+	else if(x > SQUARE*2 && x <= SQUARE*3)
+		x_Pos = SQUARE*2 + 56;
+	else if(x > SQUARE*3 && x <= SQUARE*4)
+		x_Pos = SQUARE*3 + 56;
+	else if(x > SQUARE*4 && x <= SQUARE*5)
+		x_Pos = SQUARE*4 + 56;
+	else if(x > SQUARE*5 && x <= SQUARE*6)
+		x_Pos = SQUARE*5 + 56;
+	else if(x > SQUARE*6 && x <= SQUARE*7)
+		x_Pos = SQUARE*6 + 56;
+	else if(x > SQUARE*7 && x <= SQUARE*8)
+		x_Pos = SQUARE*7 + 56;
+	else if(x > SQUARE*8 && x <= SQUARE*9)
+		x_Pos = SQUARE*8 + 56;
+
+	if(y > SQUARE*1 && y <= SQUARE*2)
+		y_Pos = SQUARE*1 + 56;
+	else if(y > SQUARE*2 && y <= SQUARE*3)
+		y_Pos = SQUARE*2 + 56;
+	else if(y > SQUARE*3 && y <= SQUARE*4)
+		y_Pos = SQUARE*3 + 56;
+	else if(y > SQUARE*4 && y <= SQUARE*5)
+		y_Pos = SQUARE*4 + 56;
+	else if(y > SQUARE*5 && y <= SQUARE*6)
+		x_Pos = SQUARE*5 + 56;
+	else if(y > SQUARE*6 && y <= SQUARE*7)
+		y_Pos = SQUARE*6 + 56;
+	else if(y > SQUARE*7 && y <= SQUARE*8)
+		y_Pos = SQUARE*7 + 56;
+	else if(y > SQUARE*8 && y <= SQUARE*9)
+		y_Pos = SQUARE*8 + 56;
 }
 /* USER CODE END 0 */
 
@@ -158,13 +165,13 @@ void printBoard()
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	int posCirc_x = 0;
-	int posCirc_y = 0;
+//	int posCirc_x = 0;
+//	int posCirc_y = 0;
   /* USER CODE END 1 */
   
 
   /* Enable I-Cache---------------------------------------------------------*/
-	SCB_EnableICache();
+  SCB_EnableICache();
 
   /* Enable D-Cache---------------------------------------------------------*/
   SCB_EnableDCache();
@@ -194,8 +201,10 @@ int main(void)
   MX_LTDC_Init();
   MX_TIM6_Init();
   MX_TIM7_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADC_Start_IT(&hadc1);
+  HAL_TIM_Base_Start_IT(&htim2);
   HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_Base_Start_IT(&htim7);
   BSP_PB_Init(BUTTON_WAKEUP, BUTTON_MODE_GPIO);
@@ -210,69 +219,99 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-    posCirc_x = BSP_LCD_GetXSize()/10 + 24;
-    posCirc_y = 273;
+    //posCirc_x = BSP_LCD_GetXSize()/10 + 24;
+    //posCirc_y = 273;
 
-    while (1)
-    {
+  while (1)
+  {
 
-    	if(TS_State.touchDetected)
-    	{
-    		flagTS = 0;
+	 /* if(TS_State.touchDetected)
+	  {
+		  flagTS = 0;
 
-    		BSP_LED_On(LED_GREEN);
+		  BSP_LED_On(LED_GREEN);
 
-    		BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-    		BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
-    		sprintf(string, "X = %d", (int)TS_State.touchX[0]);
-    		BSP_LCD_DisplayStringAtLine(4, (uint8_t*)string);
+		  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+		  BSP_LCD_FillCircle((uint32_t) TS_State.touchX[0], (uint32_t) TS_State.touchY[0], 20);
+	  }
+	  else
+		  BSP_LED_Off(LED_GREEN);
+*/
+	  //Show temperature in celsius with timer7 @2s
 
-    		sprintf(string, "Y = %d", (int)TS_State.touchY[0]);
-    		BSP_LCD_DisplayStringAtLine(5, (uint8_t*)string);
-    		BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-    		BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
-
-    		//BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-    		//BSP_LCD_FillCircle(posCirc_x,posCirc_y,28);
-    		//Ball moves according acceleration values (X and Y)
-    		BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
-    		BSP_LCD_FillCircle(posCirc_x,posCirc_y-56,20);
-    		BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-    		BSP_LCD_FillCircle(BSP_LCD_GetXSize()/10 + 24,2*SQUARE+24,20);
-    		//BSP_LCD_DrawCircle(posCirc_x,posCirc_y,25);
-    	}
-    	else
-    		BSP_LED_Off(LED_GREEN);
-
-    	//Show temperature in celsius
-    	if(flagTIM7){
-    		flagTIM7=0;
-
-    		//ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
-    		JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
-
-    		BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-    		BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
-    		sprintf(string, "Temp: %ld C", JTemp);
-    		BSP_LCD_SetFont(&Font16);
-    		BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, LEFT_MODE);
-
-    	}
-    	if(flagTIM6){
-    		flagTIM6=0;
-    		sprintf(string, "Time: %d s", counterTIM6);
-    		BSP_LCD_SetFont(&Font12);
-    		BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, RIGHT_MODE);
-    		BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-    		BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
-    	}
+	  if(flagTIM2)
+	  {
+		  flagTIM2=0;
+		  if(counterTIM2 >= 0 && counterTIM2 <=20){
+		  sprintf(string, "TimeUP: %d s", counterTIM2);
+		  BSP_LCD_SetFont(&Font12);
+		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 100, (uint8_t *)string, RIGHT_MODE);
+		  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+		  BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+		  }
+		  counterTIM2 = 20;
+	  }
 
 
+	  if(flagTIM7)
+	  {
+		  flagTIM7=0;
 
-    	/* USER CODE END WHILE */
+		  //ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
+		  JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
 
-    	/* USER CODE BEGIN 3 */
-    }
+		  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+		  BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+		  sprintf(string, "Temp: %ld C", JTemp);
+		  BSP_LCD_SetFont(&Font16);
+		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, LEFT_MODE);
+
+	  }
+	  if(flagTIM6)
+	  {
+		  flagTIM6=0;
+		  sprintf(string, "Time: %d s", counterTIM6);
+		  BSP_LCD_SetFont(&Font12);
+		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, RIGHT_MODE);
+		  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+		  BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+	  }
+
+
+
+	  if(flagPlayer)
+	  {
+		  HAL_Delay(50);
+
+		  if(TS_State.touchX[0] < BSP_LCD_GetYSize())
+		  {
+			  placeSquare(TS_State.touchX[0], TS_State.touchY[0]);
+
+			  if(counterP%2==0)
+			  {
+				  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+				  BSP_LCD_FillCircle(x_Pos, y_Pos, 20);
+				  //BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+			  }
+			  else
+			  {
+				  BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+				  BSP_LCD_FillCircle(x_Pos, x_Pos, 20);
+				  //BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+			  }
+			  counterP++;
+		  }
+		  flagTS = 0;
+		  //flagPlayer = 0;
+	  }
+
+
+
+
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
   /* USER CODE END 3 */
 }
 
@@ -617,6 +656,51 @@ static void MX_LTDC_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 9999;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 9999;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief TIM6 Initialization Function
   * @param None
   * @retval None
@@ -802,6 +886,48 @@ static void LCD_Config(void)
   BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
   BSP_LCD_FillRect(BSP_LCD_GetXSize()/10, BSP_LCD_GetYSize()/10, 400, 400);
   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
+{
+	if(adcHandle==&hadc1)
+	 ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+
+	if(flagTS == 0) //Change flag after Touch
+	{
+		if (GPIO_Pin == GPIO_PIN_13)
+		{
+			BSP_TS_GetState(&TS_State);
+			counterP = 1;
+		}
+
+		flagPlayer = 1;
+	}
+}
+
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == TIM6)
+	{
+		counterTIM6++;
+		flagTIM6 = 1;
+	}
+
+	if(htim->Instance == TIM7)
+	{
+		counterTIM7++;
+		flagTIM7 = 1;
+	}
+
+	  if(htim->Instance == TIM2)
+		{
+			counterTIM2--;
+			flagTIM2 = 1;
+	  }
 }
 /* USER CODE END 4 */
 
