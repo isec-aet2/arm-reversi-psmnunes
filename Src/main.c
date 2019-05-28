@@ -37,6 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SQUARE BSP_LCD_GetYSize()/10  /*Square Dimension*/
 #define MAX_CONVERTED_VALUE   4095    /* Max converted value */
 #define AMBIENT_TEMP            25    /* Ambient Temperature */
 #define VSENS_AT_AMBIENT_TEMP  760    /* VSENSE value (mv) at ambient temperature */
@@ -64,8 +65,11 @@ TIM_HandleTypeDef htim7;
 SDRAM_HandleTypeDef hsdram1;
 
 /* USER CODE BEGIN PV */
-volatile int flagTIM6 = 0;
-volatile int flagTIM7 = 0;
+TS_StateTypeDef TS_State;
+uint16_t maxLCD = 0;
+volatile uint8_t flagTIM6 = 0;
+volatile uint8_t flagTIM7 = 0;
+volatile uint8_t flagTS = 0;
 volatile int counterTIM6 = 0;
 volatile int counterTIM7 = 0;
 volatile long int JTemp = 0;
@@ -89,32 +93,21 @@ static void LCD_Config();
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-	TS_StateTypeDef TS_State;
-
-	if (GPIO_Pin == GPIO_PIN_13) {
-		BSP_TS_GetState(&TS_State);
-
-		sprintf(string, "X = %d", (int) TS_State.touchX[0]);
-		BSP_LCD_DisplayStringAtLine(18, (uint8_t *) string);
-		sprintf(string, "Y = %d", (int) TS_State.touchY[0]);
-		BSP_LCD_DisplayStringAtLine(19, (uint8_t *) string);
-
-		if (TS_State.touchDetected)
-			BSP_LED_On(LED_GREEN);
-		else
-			BSP_LED_Off(LED_GREEN);
-	}
-}
-
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
 {
 	if(adcHandle==&hadc1)
 	 ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
 }
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	//TS_StateTypeDef TS_State;
+	if (GPIO_Pin == GPIO_PIN_13)
+	{
+		BSP_TS_GetState(&TS_State);
+		flagTS = 1;
+	}
+}
 
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
@@ -128,13 +121,25 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 	{
 		counterTIM7++;
 		flagTIM7 = 1;
-
 	}
 }
 
 void printBoard()
 {
-	for(int i=0; i<9; i++)
+	 for(int i = 0; i<8; i++)
+		  {
+			  int x_Pos = BSP_LCD_GetXSize()/10 + i*SQUARE;
+
+			  for(int j = 0; j<8; j++)
+			  {
+				  int y_Pos = SQUARE + j*SQUARE;
+				  BSP_LCD_DrawRect(x_Pos, y_Pos, SQUARE, SQUARE);
+
+				  BSP_LCD_SetTextColor(LCD_COLOR_DARKYELLOW);
+				  BSP_LCD_FillRect(x_Pos, y_Pos, SQUARE-2, SQUARE-2);
+			  }
+		  }
+	/*for(int i=0; i<9; i++)
 	{
 		BSP_LCD_DrawVLine(BSP_LCD_GetXSize()/2.10 + (BSP_LCD_GetXSize()/16)*i, BSP_LCD_GetYSize()/10, 400);
 	}
@@ -142,7 +147,7 @@ void printBoard()
 	for(int j = 0; j<9; j++)
 	    {
 	      BSP_LCD_DrawHLine(BSP_LCD_GetXSize()/2.10, BSP_LCD_GetYSize()/10 + (BSP_LCD_GetYSize()/9.6)*j, 400);
-	    }
+	    }*/
 }
 /* USER CODE END 0 */
 
@@ -153,7 +158,8 @@ void printBoard()
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+	int posCirc_x = 0;
+	int posCirc_y = 0;
   /* USER CODE END 1 */
   
 
@@ -189,22 +195,55 @@ int main(void)
   MX_TIM6_Init();
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
-  	BSP_PB_Init(BUTTON_WAKEUP, BUTTON_MODE_GPIO); //Button to use to go back to the menu
-    BSP_LED_Init(LED_GREEN);
-    BSP_LED_Init(LED_RED);
-    LCD_Config();
-    HAL_ADC_Start_IT(&hadc1);
-    HAL_TIM_Base_Start_IT(&htim6);
-    HAL_TIM_Base_Start_IT(&htim7);
-    printBoard();
-    BSP_TS_Init(/*800, 480*/BSP_LCD_GetXSize(),BSP_LCD_GetYSize());
-    BSP_TS_ITConfig();
+  HAL_ADC_Start_IT(&hadc1);
+  HAL_TIM_Base_Start_IT(&htim6);
+  HAL_TIM_Base_Start_IT(&htim7);
+  BSP_PB_Init(BUTTON_WAKEUP, BUTTON_MODE_GPIO);
+  BSP_LED_Init(LED_GREEN);
+  BSP_LED_Init(LED_RED);
+  LCD_Config();
+
+  BSP_TS_Init(BSP_LCD_GetXSize(),BSP_LCD_GetYSize());
+  BSP_TS_ITConfig();
+  printBoard();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+    posCirc_x = BSP_LCD_GetXSize()/10 + 24;
+    posCirc_y = 273;
+
     while (1)
     {
+
+    	if(TS_State.touchDetected)
+    	{
+    		flagTS = 0;
+
+    		BSP_LED_On(LED_GREEN);
+
+    		BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    		BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+    		sprintf(string, "X = %d", (int)TS_State.touchX[0]);
+    		BSP_LCD_DisplayStringAtLine(4, (uint8_t*)string);
+
+    		sprintf(string, "Y = %d", (int)TS_State.touchY[0]);
+    		BSP_LCD_DisplayStringAtLine(5, (uint8_t*)string);
+    		BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    		BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+
+    		//BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    		//BSP_LCD_FillCircle(posCirc_x,posCirc_y,28);
+    		//Ball moves according acceleration values (X and Y)
+    		BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+    		BSP_LCD_FillCircle(posCirc_x,posCirc_y-56,20);
+    		BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    		BSP_LCD_FillCircle(BSP_LCD_GetXSize()/10 + 24,2*SQUARE+24,20);
+    		//BSP_LCD_DrawCircle(posCirc_x,posCirc_y,25);
+    	}
+    	else
+    		BSP_LED_Off(LED_GREEN);
+
     	//Show temperature in celsius
     	if(flagTIM7){
     		flagTIM7=0;
@@ -212,14 +251,24 @@ int main(void)
     		//ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
     		JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
 
+    		BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    		BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
     		sprintf(string, "Temp: %ld C", JTemp);
     		BSP_LCD_SetFont(&Font16);
     		BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, LEFT_MODE);
-    		sprintf(string, "Time: %d s", counterTIM7);
+
+    	}
+    	if(flagTIM6){
+    		flagTIM6=0;
+    		sprintf(string, "Time: %d s", counterTIM6);
     		BSP_LCD_SetFont(&Font12);
     		BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, RIGHT_MODE);
     		BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    		BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
     	}
+
+
+
     	/* USER CODE END WHILE */
 
     	/* USER CODE BEGIN 3 */
