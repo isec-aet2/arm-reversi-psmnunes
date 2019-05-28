@@ -140,21 +140,21 @@ void placeSquare(uint16_t x, uint16_t y)
 		x_Pos = SQUARE*8 + 56;
 
 	if(y > SQUARE*1 && y <= SQUARE*2)
-		y_Pos = SQUARE*1 + 56;
+		y_Pos = SQUARE*1 + 24;
 	else if(y > SQUARE*2 && y <= SQUARE*3)
-		y_Pos = SQUARE*2 + 56;
+		y_Pos = SQUARE*2 + 24;
 	else if(y > SQUARE*3 && y <= SQUARE*4)
-		y_Pos = SQUARE*3 + 56;
+		y_Pos = SQUARE*3 + 24;
 	else if(y > SQUARE*4 && y <= SQUARE*5)
-		y_Pos = SQUARE*4 + 56;
+		y_Pos = SQUARE*4 + 24;
 	else if(y > SQUARE*5 && y <= SQUARE*6)
-		x_Pos = SQUARE*5 + 56;
+		x_Pos = SQUARE*5 + 24;
 	else if(y > SQUARE*6 && y <= SQUARE*7)
-		y_Pos = SQUARE*6 + 56;
+		y_Pos = SQUARE*6 + 24;
 	else if(y > SQUARE*7 && y <= SQUARE*8)
-		y_Pos = SQUARE*7 + 56;
+		y_Pos = SQUARE*7 + 24;
 	else if(y > SQUARE*8 && y <= SQUARE*9)
-		y_Pos = SQUARE*8 + 56;
+		y_Pos = SQUARE*8 + 24;
 }
 /* USER CODE END 0 */
 
