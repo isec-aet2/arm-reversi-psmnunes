@@ -88,6 +88,8 @@ volatile int y_Pos;
 volatile uint8_t cRadius = 20;
 volatile int x_Pos0 = X0;
 volatile int y_Pos0 = Y0;
+volatile char board[SIZE][SIZE];
+volatile uint8_t playerTurn = 1;
 
 /* USER CODE END PV */
 
@@ -104,9 +106,11 @@ static void MX_TIM7_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 static void LCD_Config();
+void showTemp();
 void printBoard();
 void inicialSquare();
 void placeSquare(uint16_t, uint16_t);
+void whoPlays();
 
 /* USER CODE END PFP */
 
@@ -115,20 +119,14 @@ void placeSquare(uint16_t, uint16_t);
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-
-	if(flagTS == 0) //Change flag after Touch
-	{
 		if (GPIO_Pin == GPIO_PIN_13)
 		{
 
 			BSP_TS_GetState(&TS_State);
-
+			flagTS = 1;
 			countP = 1;
 			HAL_Delay(100);
 		}
-
-		flagTS = 1;
-	}
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
@@ -151,14 +149,12 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 		flagTIM7 = 1;
 	}
 
-	  if(htim->Instance == TIM2)
-		{
-			counterTIM2--;
-			flagTIM2 = 1;
-	  }
+	if(htim->Instance == TIM2)
+	{
+		counterTIM2--;
+		flagTIM2 = 1;
+	}
 }
-
-
 
 /* USER CODE END 0 */
 
@@ -223,37 +219,20 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-    //posCirc_x = BSP_LCD_GetXSize()/10 + 24;
-    //posCirc_y = 273;
-
   while (1)
   {
-
-	 /* if(TS_State.touchDetected)
-	  {
-		  flagTS = 0;
-
-		  BSP_LED_On(LED_GREEN);
-
-		  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-		  BSP_LCD_FillCircle((uint32_t) TS_State.touchX[0], (uint32_t) TS_State.touchY[0], 20);
-	  }
-	  else
-		  BSP_LED_Off(LED_GREEN);
-*/
-	  //Show temperature in celsius with timer7 @2s
-
 	  if(flagTIM2)
 	  {
 		  flagTIM2=0;
 		  if(counterTIM2 >= 0 && counterTIM2 <=20){
-		  sprintf(string, "TimeUP: %d s", counterTIM2);
+		  sprintf(string, "TimesUP: %d s", counterTIM2);
 		  BSP_LCD_SetFont(&Font12);
-		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 100, (uint8_t *)string, RIGHT_MODE);
+		  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 230, (uint8_t *)string, RIGHT_MODE);
 		  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 		  BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
 		  }
-		  counterTIM2 = 20;
+		  else if(counterTIM2<0)
+			  counterTIM2 = 20;
 	  }
 
 	  if(flagTIM7)
@@ -282,9 +261,7 @@ int main(void)
 
 	  if(countP)
 	  {
-		  flagTS = 0;
-
-		  HAL_Delay(50);
+		  HAL_Delay(100);
 		  countP = 1;
 		  if(TS_State.touchX[0] < BSP_LCD_GetYSize())
 		  {
@@ -294,20 +271,19 @@ int main(void)
 			  {
 				  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
 				  BSP_LCD_FillCircle(x_Pos, y_Pos, cRadius);
-				  //BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+				  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 			  }
 			  else
 			  {
 				  BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
 				  BSP_LCD_FillCircle(x_Pos, y_Pos, cRadius);
-				  //BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+				  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 			  }
 			  countS++;
 		  }
 		  flagTS = 0;
 		  countP = 0;
 	  }
-
 
     /* USER CODE END WHILE */
 
@@ -880,65 +856,102 @@ static void LCD_Config(void)
   BSP_LCD_SetFont(&Font24);
   BSP_LCD_DisplayStringAt(0, 12, (uint8_t *)"WELCOME TO REVERSI", CENTER_MODE);
 
-  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+ /* BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
   BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
-  BSP_LCD_SetFont(&Font24);
+  BSP_LCD_SetFont(&Font24); */
 
   BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
   BSP_LCD_FillRect(BSP_LCD_GetXSize()/10, BSP_LCD_GetYSize()/10, 400, 400);
   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+  // Box Play Game
+  BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+  BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE, BSP_LCD_GetYSize()/10, 320, BSP_LCD_GetYSize()-2*SQUARE);
+  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+2, BSP_LCD_GetYSize()/10+2, 316, BSP_LCD_GetYSize()-2*SQUARE-4);
+
+
+  BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+  BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+  BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+4, BSP_LCD_GetYSize()/10+4, 312, 45);
+  BSP_LCD_SetFont(&Font20);
+  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+  BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+100, BSP_LCD_GetYSize()/10+20, (uint8_t *)"Play Game", LEFT_MODE);
+
+
+}
+
+void showTemp()
+{
+
 }
 
 void printBoard()
 {
-	for(int i = 0; i<8; i++)
+	for(int i = 0; i<SIZE; i++)
 	{
-		int x_Pos = BSP_LCD_GetXSize()/10 + i*SQUARE;
+		int pos_X = BSP_LCD_GetXSize()/10 + i*SQUARE;
 
-		for(int j = 0; j<8; j++)
+		for(int j = 0; j<SIZE; j++)
 		{
-			int y_Pos = SQUARE + j*SQUARE;
-			BSP_LCD_DrawRect(x_Pos, y_Pos, SQUARE, SQUARE);
-
+			int pos_Y = SQUARE + j*SQUARE;
+			BSP_LCD_DrawRect(pos_X, pos_Y, SQUARE, SQUARE);
 			BSP_LCD_SetTextColor(LCD_COLOR_DARKYELLOW);
-			BSP_LCD_FillRect(x_Pos, y_Pos, SQUARE-2, SQUARE-2);
+			BSP_LCD_FillRect(pos_X, pos_Y, SQUARE-2, SQUARE-2);
 		}
 	}
 }
 
 void inicialSquare()
 {
-	x_Pos = SQUARE + 56;
-	y_Pos = SQUARE + 24;
 	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
-	BSP_LCD_FillCircle(x_Pos+SQUARE*4, y_Pos+SQUARE*4, cRadius);
-	BSP_LCD_FillCircle(x_Pos+SQUARE*3, y_Pos+SQUARE*3, cRadius);
+	BSP_LCD_FillCircle(x_Pos0+SQUARE*5, y_Pos0+SQUARE*5, cRadius);
+	BSP_LCD_FillCircle(x_Pos0+SQUARE*4, y_Pos0+SQUARE*4, cRadius);
+	// Player 2
 	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-	BSP_LCD_FillCircle(x_Pos+SQUARE*3, y_Pos+SQUARE*4, cRadius);
-	BSP_LCD_FillCircle(x_Pos+SQUARE*4, y_Pos+SQUARE*3, cRadius);
+	BSP_LCD_FillCircle(x_Pos0+SQUARE*4, y_Pos0+SQUARE*5, cRadius);
+	BSP_LCD_FillCircle(x_Pos0+SQUARE*5, y_Pos0+SQUARE*4, cRadius);
 }
 
 void placeSquare(uint16_t x, uint16_t y)
 {
-	  flagTS=0;
+	int i = 0;
+	int j = 0;
 
-	    if(TS_State.touchX[0]>=(x_Pos0) && TS_State.touchY[0]>=(y_Pos0) && TS_State.touchX[0]<=x_Pos0+SQUARE*8 && TS_State.touchY[0]<=y_Pos0+SQUARE*8)
-	  {
-	        for(int i=1; i<=SIZE; i++)
-	    {
-	      for(int j=1; j<=SIZE; j++)
-	      {
-	        if((TS_State.touchX[0]) > SQUARE*i && (TS_State.touchX[0]) <= SQUARE*(i+1) &&
-	          (TS_State.touchY[0]) > SQUARE*j && (TS_State.touchY[0]) <= SQUARE*(j+1))
-	        {
-	          x_Pos = x_Pos0+SQUARE*i;
-	          y_Pos = y_Pos0+SQUARE*j;
-	          i = SIZE;
-	          j = SIZE;
-	        }
-	      }
-	    }
-	  }
+	flagTS=0;
+
+	if(TS_State.touchX[0]>=(x_Pos0) && TS_State.touchY[0]>=(y_Pos0) && TS_State.touchX[0]<=x_Pos0+SQUARE*8 && TS_State.touchY[0]<=y_Pos0+SQUARE*8)
+	{
+		for(i=1; i<=SIZE; i++)
+		{
+			for(j=1; j<=SIZE; j++)
+			{
+				if((TS_State.touchX[0]) > SQUARE*i && (TS_State.touchX[0]) <= SQUARE*(i+1) &&
+						(TS_State.touchY[0]) > SQUARE*j && (TS_State.touchY[0]) <= SQUARE*(j+1))
+				{
+					x_Pos = /*(float)*/x_Pos0+SQUARE*i;
+					y_Pos = /*(float)*/y_Pos0+SQUARE*j;
+					i = SIZE;
+					j = SIZE;
+				}
+			}
+		}
+	}
+}
+
+void whoPlays()
+{
+	//Show Player 1
+    if (playerTurn%2 == 1){
+    	BSP_LCD_SetFont(&Font16);
+    	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+    	BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 50, (uint8_t *)"Player 1", RIGHT_MODE);
+    }
+    else{
+    	BSP_LCD_SetFont(&Font16);
+    	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+    	BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 50, (uint8_t *)"Player 2", RIGHT_MODE);
+    }
 }
 
 /* USER CODE END 4 */
