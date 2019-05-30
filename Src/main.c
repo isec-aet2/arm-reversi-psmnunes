@@ -118,8 +118,8 @@ static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 static void LCD_Config();
 void showTemp();
-void showTimesUp();
-void timesUp();
+void TimesUp();
+void showTimesUp(uint8_t);
 void showTimer();
 void initial_screen();
 void printBoard();
@@ -173,8 +173,8 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 
 	if(htim->Instance == TIM2)
 	{
-		flagTIM2 = 1;
 		counterTIM2--;
+		flagTIM2 = 1;
 
 	}
 }
@@ -286,7 +286,7 @@ int main(void) // TODO: main
 	  }
 
 	  showTemp();
-	  showTimesUp();
+	  TimesUp();
 	  showTimer();
 
 
@@ -951,8 +951,8 @@ void boardInfo() //Board with  information (players, timers, scores)
 	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
 	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+40, BSP_LCD_GetYSize()/10+110, (uint8_t *)"PIECES", LEFT_MODE);
 	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+195, BSP_LCD_GetYSize()/10+110, (uint8_t *)"PIECES", LEFT_MODE);
-	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+40, BSP_LCD_GetYSize()/10+140, (uint8_t *)"TIMER", LEFT_MODE);
-	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+195, BSP_LCD_GetYSize()/10+140, (uint8_t *)"TIMER", LEFT_MODE);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+40, BSP_LCD_GetYSize()/10+140, (uint8_t *)" -- ", LEFT_MODE);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+195, BSP_LCD_GetYSize()/10+140, (uint8_t *)" -- ", LEFT_MODE);
 
 	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+40, BSP_LCD_GetYSize()/10+230, (uint8_t *)"SCORE", LEFT_MODE);
 	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+195, BSP_LCD_GetYSize()/10+230, (uint8_t *)"SCORE", LEFT_MODE);
@@ -993,7 +993,7 @@ void showTemp()
 	}
 }
 
-void showTimesUp()
+void TimesUp()
 {
 	if(flagTIM2 == 1)
 	{
@@ -1003,16 +1003,23 @@ void showTimesUp()
 		}
 		else if(counterTIM2<0)
 			counterTIM2 = 20;*/
-
+		if (counterTIM2>20)
+		counterTIM2=20;
+		showTimesUp(counterTIM2);
 	}
+
 }
 
 void showTimer()
 {
+	int hour = counterTIM6/3600;
+	int min = (counterTIM6%3600)/60;
+	int sec = counterTIM6%60;
+
 	if(flagTIM6 == 1)
 	{
 		flagTIM6=0;
-		sprintf(string, "Time: %d s", counterTIM6);
+		sprintf(string, "Time: %02d:%02d:%02d", hour, min, sec);
 		BSP_LCD_SetFont(&Font12);
 		BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, RIGHT_MODE);
 		BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
@@ -1020,14 +1027,13 @@ void showTimer()
 	}
 }
 
-void timesUp()
+void showTimesUp(uint8_t counterTIM2)
 {
-	sprintf(string, "TimesUP: %d s", counterTIM2);
+	sprintf(string, "TimesUP: %02d s", counterTIM2);
 				BSP_LCD_SetFont(&Font12);
 				BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 230, (uint8_t *)string, RIGHT_MODE);
 				BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 				BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
-
 }
 
 void printBoard()
