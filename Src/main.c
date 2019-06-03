@@ -242,6 +242,16 @@ int main(void)
   while (1)
   {
 	  HAL_Delay(100);
+
+/////////////////   GOAL 11 /////////////////////
+	  if(flagPB == 1)
+	  	  {
+		  flagPB=0;
+
+		  if(countPB == 1)
+			  playerTurn++;
+	  	//////////////////////
+	  	  }
 /*
 	  if(flagTS == 1)
 	  {
