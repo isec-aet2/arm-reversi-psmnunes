@@ -25,10 +25,12 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include "stm32f769i_discovery.h"
 #include "stm32f769i_discovery_lcd.h"
 #include "stm32f769i_discovery_ts.h"
-#include "stdbool.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,8 +42,8 @@
 /* USER CODE BEGIN PD */
 #define SQUARE BSP_LCD_GetYSize()/10  /*Square Dimension*/
 #define SIZE 8
-#define X0 56 // Coordenates with offset
-#define Y0 24
+#define X0 	56 // Coordenates with offset
+#define Y0 	24
 #define MAX_CONVERTED_VALUE   4095    /* Max converted value */
 #define AMBIENT_TEMP            25    /* Ambient Temperature */
 #define VSENS_AT_AMBIENT_TEMP  760    /* VSENSE value (mv) at ambient temperature */
@@ -140,6 +142,7 @@ void writeSDCard();
 
 void writeSDCard()
 {
+
 	char SDbuffer[32];
 
 	if(f_mount(&SDFatFS, SDPath, 0) != FR_OK)
@@ -255,24 +258,7 @@ int main(void)
 	  TimesUp();
 	  showTimer();
 	  showTemp();
-	  /*if(flagPB == 1)
-	 	  {
 
-	 		  flagPB=0;
-	 		  if(countPB==0)
-	 		  {
-	 			  initialScreen();
-	 		  }
-	 		  if(countPB==1)
-	 		  {
-	 			  //writeSDCard();
-	 			  boardInfo();
-	 			  printBoard();
-	 			  initialSquare();
-	 		  }
-
-	 	  }
-*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -1200,7 +1186,18 @@ void touchScreen()
 			BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+107, BSP_LCD_GetYSize()/10+360, (uint8_t *)"Press to exit", LEFT_MODE);
 
 		}
+//////////////////    GOAL 10   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+		if(TS_State.touchX[0] > (BSP_LCD_GetYSize()-SIZE+40) && TS_State.touchY[0] > (BSP_LCD_GetYSize()/10) && TS_State.touchX[0] < (BSP_LCD_GetYSize()-SIZE+4+312) && TS_State.touchY[0] < (BSP_LCD_GetYSize()/10+40))
+		BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+		BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+		BSP_LCD_SetFont(&Font12);
+		BSP_LCD_DisplayStringAt(600, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)"Reset Timer", LEFT_MODE);
+		HAL_Delay(500);
+		counterTIM6=0;
+		showTimer();
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		if((TS_State.touchX[0] >= SQUARE) && (TS_State.touchY[0] >= SQUARE) && (TS_State.touchX[0] <= (SQUARE*(SIZE+1))) && (TS_State.touchY[0] <= (SQUARE*(SIZE+1))))
 		{
 			placeSquare(TS_State.touchX[0], TS_State.touchY[0]);
