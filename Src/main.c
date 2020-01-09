@@ -20,10 +20,15 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "fatfs.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include "stm32f769i_discovery.h"
+#include "stm32f769i_discovery_lcd.h"
+#include "stm32f769i_discovery_ts.h"
+#include "stdbool.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,7 +38,19 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SQUARE BSP_LCD_GetYSize()/10  /*Square Dimension*/
+#define SIZE 8
+#define X0 56 // Coordenates with offset
+#define Y0 24
+#define MAX_CONVERTED_VALUE   4095    /* Max converted value */
+#define AMBIENT_TEMP            25    /* Ambient Temperature */
+#define VSENS_AT_AMBIENT_TEMP  760    /* VSENSE value (mv) at ambient temperature */
+#define AVG_SLOPE               25    /* Avg_Solpe multiply by 10 */
+#define VREF                  3300
+#define SQUARE_PLAYER_1       'X'
+#define SQUARE_PLAYER_2       'O'
+#define EMPTY_SQUARE          '.'
+#define POSSIBLE_PLAY         '*'
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -42,6 +59,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
 
 DMA2D_HandleTypeDef hdma2d;
 
@@ -49,25 +67,96 @@ DSI_HandleTypeDef hdsi;
 
 LTDC_HandleTypeDef hltdc;
 
+SD_HandleTypeDef hsd2;
+
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim6;
+TIM_HandleTypeDef htim7;
+
 SDRAM_HandleTypeDef hsdram1;
 
 /* USER CODE BEGIN PV */
-
+TS_StateTypeDef TS_State;
+volatile uint8_t flagTIM2 = 0;
+volatile uint8_t flagTIM6 = 0;
+volatile uint8_t flagTIM7 = 0;
+volatile uint8_t flagTS = 0;
+volatile uint8_t flagPB = 0;
+volatile uint8_t counterTIM2 = 20;
+volatile uint8_t counterTIM6 = 0;
+volatile uint8_t counterTIM7 = 0;
+volatile uint8_t countP = 0;
+volatile uint8_t countTS = 0;
+volatile uint8_t countSwap = 0;
+volatile uint8_t countPB = 0;
+UINT nBytes;
+volatile long int JTemp = 0;
+volatile uint32_t ConvertedValue; // Value from ADC to show temperature
+char string[100];
+volatile int x_Pos;
+volatile int y_Pos;
+volatile uint16_t touchX;
+volatile uint16_t touchY;
+volatile uint8_t cRadius = 20;
+volatile int x_Pos0 = X0;
+volatile int y_Pos0 = Y0;
+volatile char board[SIZE][SIZE] = {0};
+volatile uint8_t playerTurn = 0;
+volatile uint8_t countPplays = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_ADC1_Init(void);
 static void MX_DMA2D_Init(void);
 static void MX_DSIHOST_DSI_Init(void);
 static void MX_FMC_Init(void);
 static void MX_LTDC_Init(void);
+static void MX_TIM6_Init(void);
+static void MX_TIM7_Init(void);
+static void MX_SDMMC2_SD_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
+static void LCD_Config();
+void showTemp();
+void TimesUp();
+void showTimesUp(uint8_t);
+void showTimer();
+void initialScreen();
+void printBoard();
+void boardInfo();
+void initialSquare();
+void placeSquare(float, float);
+void touchScreen();
+void whoPlays();
+void swapPlayer(uint16_t x, uint16_t y);
+void writeSDCard();
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+void writeSDCard()
+{
+	char SDbuffer[32];
+
+	if(f_mount(&SDFatFS, SDPath, 0) != FR_OK)
+	        Error_Handler();
+
+	    if(f_open(&SDFile, "logtemp.txt", FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+	        Error_Handler();
+
+		  sprintf(SDbuffer, "Internal Temperature is %ld C \n", JTemp);
+
+
+	 	if(f_write(&SDFile, SDbuffer, strlen(SDbuffer), &nBytes) != FR_OK)
+	 		  	  Error_Handler();
+
+		  f_close(&SDFile);
+
+}
 
 /* USER CODE END 0 */
 
@@ -106,11 +195,42 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_ADC1_Init();
   MX_DMA2D_Init();
   MX_DSIHOST_DSI_Init();
   MX_FMC_Init();
   MX_LTDC_Init();
+  MX_TIM6_Init();
+  MX_TIM7_Init();
+  MX_SDMMC2_SD_Init();
+  MX_TIM2_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
+  HAL_ADC_Start_IT(&hadc1);
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start_IT(&htim6);
+  HAL_TIM_Base_Start_IT(&htim7);
+  BSP_PB_Init(BUTTON_WAKEUP, BUTTON_MODE_GPIO);
+  BSP_LED_Init(LED_GREEN);
+  BSP_LED_Init(LED_RED);
+  LCD_Config();
+  BSP_TS_Init(BSP_LCD_GetXSize(),BSP_LCD_GetYSize());
+  BSP_TS_ITConfig();
+
+  //initialScreen();
+  HAL_Delay(200);
+  while(BSP_PB_GetState(BUTTON_WAKEUP)!=1){
+
+	  //writeSDCard();
+	  HAL_Delay(111);
+	  initialScreen();
+
+  }
+  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  BSP_LCD_FillRect(0, SQUARE, BSP_LCD_GetXSize(), BSP_LCD_GetYSize()-SQUARE);
+  boardInfo();
+  printBoard();
+  initialSquare();
 
   /* USER CODE END 2 */
 
@@ -118,6 +238,41 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  HAL_Delay(100);
+/*
+	  if(flagTS == 1)
+	  {
+		  HAL_Delay(100);
+		  flagTS = 0;
+		  TimesUp();
+		  	 		  showTimer();
+		  	 		  showTemp();
+
+		  touchScreen();
+	  }*/
+	  //touchBoardInfo();
+	  touchScreen();
+	  TimesUp();
+	  showTimer();
+	  showTemp();
+	  /*if(flagPB == 1)
+	 	  {
+
+	 		  flagPB=0;
+	 		  if(countPB==0)
+	 		  {
+	 			  initialScreen();
+	 		  }
+	 		  if(countPB==1)
+	 		  {
+	 			  //writeSDCard();
+	 			  boardInfo();
+	 			  printBoard();
+	 			  initialSquare();
+	 		  }
+
+	 	  }
+*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -148,7 +303,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLM = 25;
   RCC_OscInitStruct.PLL.PLLN = 400;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 8;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -172,17 +327,70 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC|RCC_PERIPHCLK_SDMMC2
+                              |RCC_PERIPHCLK_CLK48;
   PeriphClkInitStruct.PLLSAI.PLLSAIN = 192;
   PeriphClkInitStruct.PLLSAI.PLLSAIR = 2;
   PeriphClkInitStruct.PLLSAI.PLLSAIQ = 2;
   PeriphClkInitStruct.PLLSAI.PLLSAIP = RCC_PLLSAIP_DIV2;
   PeriphClkInitStruct.PLLSAIDivQ = 1;
   PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
+  PeriphClkInitStruct.Clk48ClockSelection = RCC_CLK48SOURCE_PLL;
+  PeriphClkInitStruct.Sdmmc2ClockSelection = RCC_SDMMC2CLKSOURCE_CLK48;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+  */
+  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_56CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -415,6 +623,155 @@ static void MX_LTDC_Init(void)
 
 }
 
+/**
+  * @brief SDMMC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SDMMC2_SD_Init(void)
+{
+
+  /* USER CODE BEGIN SDMMC2_Init 0 */
+
+  /* USER CODE END SDMMC2_Init 0 */
+
+  /* USER CODE BEGIN SDMMC2_Init 1 */
+
+  /* USER CODE END SDMMC2_Init 1 */
+  hsd2.Instance = SDMMC2;
+  hsd2.Init.ClockEdge = SDMMC_CLOCK_EDGE_RISING;
+  hsd2.Init.ClockBypass = SDMMC_CLOCK_BYPASS_DISABLE;
+  hsd2.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
+  hsd2.Init.BusWide = SDMMC_BUS_WIDE_1B;
+  hsd2.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
+  hsd2.Init.ClockDiv = 0;
+  /* USER CODE BEGIN SDMMC2_Init 2 */
+
+  /* USER CODE END SDMMC2_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 9999;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 9999;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 9999;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 9999;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 9999;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 19999;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
+
+}
+
 /* FMC initialization function */
 static void MX_FMC_Init(void)
 {
@@ -469,20 +826,387 @@ static void MX_FMC_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOI_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOJ_CLK_ENABLE();
+
+  /*Configure GPIO pin : PI13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOI, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PI15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_15;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOI, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if (GPIO_Pin == GPIO_PIN_13)
+	{
+		BSP_TS_GetState(&TS_State);
+		flagTS = 1;
+		//countP = 1;
+		//HAL_Delay(11);
+		touchX = (int) TS_State.touchX[0];
+		touchY = (int) TS_State.touchY[0];
+	}
+	if(GPIO_Pin == GPIO_PIN_0)
+	{
+		flagPB = 1;
+		countPB++;
+	}
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
+{
+	if(adcHandle==&hadc1)
+	 ConvertedValue=HAL_ADC_GetValue(&hadc1); //get value
+}
+
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == TIM6)
+	{
+		counterTIM6++;
+		flagTIM6 = 1;
+	}
+
+	if(htim->Instance == TIM7)
+	{
+		counterTIM7++;
+		flagTIM7 = 1;
+	}
+
+	if(htim->Instance == TIM2)
+	{
+		counterTIM2--;
+		flagTIM2 = 1;
+	}
+}
+
+static void LCD_Config(void)
+{
+  uint32_t  lcd_status = LCD_OK;
+
+  /* Initialize the LCD */
+  lcd_status = BSP_LCD_Init();
+  while(lcd_status != LCD_OK);
+
+  BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
+
+  /* Clear the LCD */
+  BSP_LCD_Clear(LCD_COLOR_WHITE);
+
+  /* Set LCD Example description */
+  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+  BSP_LCD_SetFont(&Font12);
+  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()- 20, (uint8_t *)"Made in China", CENTER_MODE);
+  BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+  BSP_LCD_FillRect(0, 0, BSP_LCD_GetXSize(), 45);
+  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+  BSP_LCD_SetFont(&Font24);
+  BSP_LCD_DisplayStringAt(0, 12, (uint8_t *)"WELCOME TO REVERSI", CENTER_MODE);
+
+  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  BSP_LCD_FillRect(BSP_LCD_GetXSize()/10, BSP_LCD_GetYSize()/10, 400, 400);
+
+
+}
+
+void initialScreen()
+{
+	BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+
+  sprintf(string, "PRESS BUTTON TO ENTER GAME");
+  BSP_LCD_SetFont(&Font24);
+  BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2, (uint8_t *)string, CENTER_MODE);
+
+}
+
+void boardInfo() //Board with  information (players, timers, scores)
+{
+	// Box Play Game
+	BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+	BSP_LCD_FillRect(0, BSP_LCD_GetYSize()/10, BSP_LCD_GetXSize(), BSP_LCD_GetYSize()-2*SQUARE);
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+	BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE, BSP_LCD_GetYSize()/10, 320, BSP_LCD_GetYSize()-2*SQUARE);
+	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+	BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+2, BSP_LCD_GetYSize()/10+2, 316, BSP_LCD_GetYSize()-2*SQUARE-4);
+
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+	BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+	BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+4, BSP_LCD_GetYSize()/10+4, 312, 45);
+	BSP_LCD_SetFont(&Font16);
+	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+	BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+70, BSP_LCD_GetYSize()/10+20, (uint8_t *)"GAME INFORMATION", LEFT_MODE);
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+
+	BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+	BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+4, BSP_LCD_GetYSize()/10+325, 312, 55);
+	BSP_LCD_SetFont(&Font16);
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+35, BSP_LCD_GetYSize()/10+75, (uint8_t *)"PLAYER 1", LEFT_MODE);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+190, BSP_LCD_GetYSize()/10+75, (uint8_t *)"PLAYER 2", LEFT_MODE);
+	BSP_LCD_SetFont(&Font12);
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+40, BSP_LCD_GetYSize()/10+110, (uint8_t *)"PIECES", LEFT_MODE);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+195, BSP_LCD_GetYSize()/10+110, (uint8_t *)"PIECES", LEFT_MODE);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+40, BSP_LCD_GetYSize()/10+140, (uint8_t *)" -- ", LEFT_MODE);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+195, BSP_LCD_GetYSize()/10+140, (uint8_t *)" -- ", LEFT_MODE);
+
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+40, BSP_LCD_GetYSize()/10+230, (uint8_t *)"SCORE", LEFT_MODE);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+195, BSP_LCD_GetYSize()/10+230, (uint8_t *)"SCORE", LEFT_MODE);
+	BSP_LCD_SetFont(&Font16);
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+40, BSP_LCD_GetYSize()/10+300, (uint8_t *)"WINNER IS ", LEFT_MODE);
+	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+
+	BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+	BSP_LCD_SetFont(&Font16);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+105, BSP_LCD_GetYSize()/10+336, (uint8_t *)"QUIT GAME", LEFT_MODE);
+	BSP_LCD_SetFont(&Font12);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+107, BSP_LCD_GetYSize()/10+360, (uint8_t *)"Press to exit", LEFT_MODE);
+
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+	BSP_LCD_DrawVLine(630, 95, 241);
+	BSP_LCD_DrawVLine(631, 95, 242);
+	BSP_LCD_DrawHLine(473, 335, 318);
+	BSP_LCD_DrawHLine(473, 336, 318);
+}
+/* Function to print internal temperature from ADC */
+void showTemp()
+{
+	if(flagTIM7 == 1)
+	{
+		flagTIM7=0;
+
+		//ConvertedValue = HAL_ADC_GetValue(&hadc1); //get value
+		JTemp = ((((ConvertedValue * VREF)/MAX_CONVERTED_VALUE) - VSENS_AT_AMBIENT_TEMP) * 10 / AVG_SLOPE) + AMBIENT_TEMP;
+
+		BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+		BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+		sprintf(string, "Temp: %ld C", JTemp);
+		BSP_LCD_SetFont(&Font16);
+		BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 232, (uint8_t *)string, LEFT_MODE);
+
+	}
+}
+
+void TimesUp()
+{
+	if(flagTIM2 == 1)
+	{
+		flagTIM2=0;
+		if (counterTIM2>20)
+		counterTIM2=20;
+		showTimesUp(counterTIM2);
+	}
+}
+
+void showTimer()
+{
+	int hour = 0, min = 0, sec = 0;
+	hour = counterTIM6/3600;
+	min = (counterTIM6%3600)/60;
+	sec = (counterTIM6%3600)%60;
+
+	if(flagTIM6 == 1)
+	{
+		flagTIM6=0;
+		sprintf(string,"Time: %02d:%02d:%02d", hour, min, sec);
+				BSP_LCD_SetFont(&Font12);
+				BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 214, (uint8_t *)string, RIGHT_MODE);
+				BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+				BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+	}
+}
+
+void showTimesUp(uint8_t counterTIM2)
+{
+	sprintf(string, "TimesUP: %02d s", counterTIM2);
+	BSP_LCD_SetFont(&Font12);
+	BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 230, (uint8_t *)string, RIGHT_MODE);
+	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+	BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+}
+
+void printBoard()
+{
+	int pos_X = 0;
+	int pos_Y = 0;
+
+	for(int i = 0; i<SIZE; i++)
+	{
+		pos_X = SQUARE + i*SQUARE;
+
+		for(int j = 0; j<SIZE; j++)
+		{
+			pos_Y = SQUARE + j*SQUARE;
+			BSP_LCD_DrawRect(pos_X, pos_Y, SQUARE, SQUARE);
+			BSP_LCD_SetTextColor(LCD_COLOR_DARKYELLOW);
+			BSP_LCD_FillRect(pos_X, pos_Y, SQUARE-2, SQUARE-2);
+		}
+	}
+}
+
+void initialSquare()//four central square
+{
+
+	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+	BSP_LCD_FillCircle(SQUARE/2+SQUARE*5, SQUARE/2+SQUARE*5, cRadius);
+	BSP_LCD_FillCircle(SQUARE/2+SQUARE*4, SQUARE/2+SQUARE*4, cRadius);
+	// Player 2
+	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+	BSP_LCD_FillCircle(SQUARE/2+SQUARE*4, SQUARE/2+SQUARE*5, cRadius);
+	BSP_LCD_FillCircle(SQUARE/2+SQUARE*5, SQUARE/2+SQUARE*4, cRadius);
+}
+
+void placeSquare(float x, float y)
+{
+	int i = 0;
+	int j = 0;
+	x= 0.0;
+	y= 0.0;
+	if((TS_State.touchX[0] >= SQUARE) && (TS_State.touchY[0] >= SQUARE) && (TS_State.touchX[0] <= (SQUARE*(SIZE+1))) && (TS_State.touchY[0] <= (SQUARE*(SIZE+1))))
+	{
+		for(i=0; i<=SIZE; i++)
+		{
+			for(j=0; j<=SIZE; j++)
+			{
+				if(board[i][j] == 0)
+				{
+					if((TS_State.touchX[0] > SQUARE*(i+1)) && (TS_State.touchX[0] <= SQUARE*(i+2)) && (TS_State.touchY[0] > SQUARE*(j+1)) && (TS_State.touchY[0] <= SQUARE*(j+2)))
+					{
+						board[i][j] = 1;
+
+						x_Pos = /*(float)*/SQUARE/2 + SQUARE*(i+1);
+						y_Pos = /*(float)*/SQUARE/2 + SQUARE*(j+1);
+
+						i = SIZE;
+						j = SIZE;
+
+					}
+				}
+			}
+		}
+	}
+	swapPlayer(x_Pos, y_Pos);
+	countP++;
+}
+
+void swapPlayer(uint16_t x, uint16_t y)
+{
+     if(countP%2 == 0)
+      {
+          BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+          BSP_LCD_FillCircle(x_Pos, y_Pos, cRadius);
+
+      }
+      else
+      {
+          BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+          BSP_LCD_FillCircle(x_Pos, y_Pos, cRadius);
+      }
+}
+
+void whoPlays()
+{
+	//Show Player 1
+    if (playerTurn%2 == 1){
+    	BSP_LCD_SetFont(&Font16);
+    	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+    	BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 50, (uint8_t *)"Player 1", RIGHT_MODE);
+    }
+    else{
+    	BSP_LCD_SetFont(&Font16);
+    	BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+    	BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 - 50, (uint8_t *)"Player 2", RIGHT_MODE);
+    }
+}
+
+void touchScreen()
+{
+	if(flagTS==1){
+		flagTS=0;
+
+		if(TS_State.touchX[0] > (BSP_LCD_GetYSize()-SIZE+4) && TS_State.touchY[0] > (BSP_LCD_GetYSize()/10+4) && TS_State.touchX[0] < (BSP_LCD_GetYSize()-SIZE+4+312) && TS_State.touchY[0] < (BSP_LCD_GetYSize()/10+4+45))
+		{
+			BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+4, BSP_LCD_GetYSize()/10+4, 312, 45);
+			BSP_LCD_SetFont(&Font16);
+			BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+			BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+			BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+70, BSP_LCD_GetYSize()/10+20, (uint8_t *)"Not Implemented !", LEFT_MODE);
+			BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+			HAL_Delay(500);
+
+			flagTS=0;
+			BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+4, BSP_LCD_GetYSize()/10+4, 312, 45);
+			BSP_LCD_SetFont(&Font16);
+			BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+			BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+			BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+70, BSP_LCD_GetYSize()/10+20, (uint8_t *)"GAME INFORMATION", LEFT_MODE);
+			BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+
+		}
+		if(TS_State.touchX[0] > (BSP_LCD_GetYSize()-SIZE+4) && TS_State.touchY[0] > (BSP_LCD_GetYSize()/10+336) && TS_State.touchX[0] < (BSP_LCD_GetYSize()-SIZE+4+312) && TS_State.touchY[0] < (BSP_LCD_GetYSize()/10+325+55))
+		{
+			BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+4, BSP_LCD_GetYSize()/10+325, 312, 55);
+			BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+			BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+			BSP_LCD_SetFont(&Font16);
+			BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+75, BSP_LCD_GetYSize()/10+336, (uint8_t *)"Work in Progress !", LEFT_MODE);
+			HAL_Delay(500);
+
+			flagTS=0;
+			BSP_LCD_FillRect(BSP_LCD_GetYSize()-SIZE+4, BSP_LCD_GetYSize()/10+325, 312, 55);
+			BSP_LCD_SetBackColor(LCD_COLOR_BROWN);
+			BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+			BSP_LCD_SetFont(&Font16);
+			BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+105, BSP_LCD_GetYSize()/10+336, (uint8_t *)"QUIT GAME", LEFT_MODE);
+			BSP_LCD_SetFont(&Font12);
+			BSP_LCD_DisplayStringAt(BSP_LCD_GetYSize()-SIZE+107, BSP_LCD_GetYSize()/10+360, (uint8_t *)"Press to exit", LEFT_MODE);
+
+		}
+
+		if((TS_State.touchX[0] >= SQUARE) && (TS_State.touchY[0] >= SQUARE) && (TS_State.touchX[0] <= (SQUARE*(SIZE+1))) && (TS_State.touchY[0] <= (SQUARE*(SIZE+1))))
+		{
+			placeSquare(TS_State.touchX[0], TS_State.touchY[0]);
+		}
+	}
+}
 
 /* USER CODE END 4 */
 
@@ -494,7 +1218,10 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-
+	while(1){
+			BSP_LED_Toggle(LED_RED);
+			HAL_Delay(125);
+		}
   /* USER CODE END Error_Handler_Debug */
 }
 
